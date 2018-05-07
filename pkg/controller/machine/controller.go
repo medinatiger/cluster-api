@@ -22,7 +22,6 @@ import (
 	"github.com/golang/glog"
 	"github.com/kubernetes-incubator/apiserver-builder/pkg/builders"
 
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
@@ -65,9 +64,6 @@ func (c *MachineControllerImpl) Init(arguments sharedinformers.ControllerInitArg
 
 	c.linkedNodes = make(map[string]bool)
 
-	// Create machine actuator.
-	// TODO: Assume default namespace for now. Maybe a separate a controller per namespace?
-	c.machineClient = clientset.ClusterV1alpha1().Machines(corev1.NamespaceDefault)
 	c.actuator = actuator
 
 	// Start watching for Node resource. It will effectively create a new worker queue, and
@@ -98,10 +94,11 @@ func (c *MachineControllerImpl) Reconcile(machine *clusterv1.Machine) error {
 			glog.Errorf("Error deleting machine object %v; %v", name, err)
 			return err
 		}
+
 		// Remove finalizer on successful deletion.
 		glog.Infof("machine object %v deletion successful, removing finalizer.", name)
 		machine.ObjectMeta.Finalizers = util.Filter(machine.ObjectMeta.Finalizers, clusterv1.MachineFinalizer)
-		if _, err := c.machineClient.Update(machine); err != nil {
+		if _, err := c.clientSet.ClusterV1alpha1().Machines(machine.Namespace).Update(machine); err != nil {
 			glog.Errorf("Error removing finalizer from machine object %v; %v", name, err)
 			return err
 		}

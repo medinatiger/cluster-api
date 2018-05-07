@@ -55,7 +55,7 @@ func StartMachineController(server *options.MachineControllerServer, shutdown <-
 		glog.Fatalf("Could not create client for talking to the apiserver: %v", err)
 	}
 
-	actuator, err := google.NewMachineActuator(server.KubeadmToken, client.ClusterV1alpha1().Machines(corev1.NamespaceDefault), server.MachineSetupConfigsPath)
+	actuator, err := google.NewMachineActuator(server.KubeadmToken, client.ClusterV1alpha1(), server.MachineSetupConfigsPath)
 	if err != nil {
 		glog.Fatalf("Could not create Google machine actuator: %v", err)
 	}

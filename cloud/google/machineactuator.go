@@ -81,7 +81,7 @@ type GCEClient struct {
 	codecFactory   *serializer.CodecFactory
 	kubeadmToken   string
 	sshCreds       SshCreds
-	machineClient  client.MachineInterface
+	v1Alpha1Client client.ClusterV1alpha1Interface
 	configWatch    *machinesetup.ConfigWatch
 }
 
@@ -90,7 +90,7 @@ const (
 	gceWaitSleep = time.Second * 5
 )
 
-func NewMachineActuator(kubeadmToken string, machineClient client.MachineInterface, configListPath string) (*GCEClient, error) {
+func NewMachineActuator(kubeadmToken string, v1Alpha1Client client.ClusterV1alpha1Interface, configListPath string) (*GCEClient, error) {
 	// The default GCP client expects the environment variable
 	// GOOGLE_APPLICATION_CREDENTIALS to point to a file with service credentials.
 	client, err := google.DefaultClient(context.TODO(), compute.ComputeScope)
@@ -139,8 +139,8 @@ func NewMachineActuator(kubeadmToken string, machineClient client.MachineInterfa
 			privateKeyPath: privateKeyPath,
 			user:           user,
 		},
-		machineClient: machineClient,
-		configWatch:   configWatch,
+		v1Alpha1Client: v1Alpha1Client,
+		configWatch:    configWatch,
 	}, nil
 }
 
@@ -262,7 +262,7 @@ func (gce *GCEClient) Create(cluster *clusterv1.Cluster, machine *clusterv1.Mach
 
 	if instance == nil {
 		labels := map[string]string{}
-		if gce.machineClient == nil {
+		if gce.v1Alpha1Client == nil {
 			labels[BootstrapLabelKey] = "true"
 		}
 
@@ -324,9 +324,9 @@ func (gce *GCEClient) Create(cluster *clusterv1.Cluster, machine *clusterv1.Mach
 				"error creating GCE instance: %v", err))
 		}
 
-		// If we have a machineClient, then annotate the machine so that we
+		// If we have a v1Alpha1Client, then annotate the machine so that we
 		// remember exactly what VM we created for it.
-		if gce.machineClient != nil {
+		if gce.v1Alpha1Client != nil {
 			return gce.updateAnnotations(machine)
 		}
 	} else {
@@ -381,10 +381,10 @@ func (gce *GCEClient) Delete(machine *clusterv1.Machine) error {
 			"error deleting GCE instance: %v", err))
 	}
 
-	if gce.machineClient != nil {
+	if gce.v1Alpha1Client != nil {
 		// Remove the finalizer
 		machine.ObjectMeta.Finalizers = util.Filter(machine.ObjectMeta.Finalizers, clusterv1.MachineFinalizer)
-		_, err = gce.machineClient.Update(machine)
+		_, err = gce.v1Alpha1Client.Machines(machine.Namespace).Update(machine)
 	}
 
 	return err
@@ -518,7 +518,7 @@ func (gce *GCEClient) updateAnnotations(machine *clusterv1.Machine) error {
 	machine.ObjectMeta.Annotations[ProjectAnnotationKey] = project
 	machine.ObjectMeta.Annotations[ZoneAnnotationKey] = zone
 	machine.ObjectMeta.Annotations[NameAnnotationKey] = name
-	_, err = gce.machineClient.Update(machine)
+	_, err = gce.v1Alpha1Client.Machines(machine.Namespace).Update(machine)
 	if err != nil {
 		return err
 	}
@@ -686,12 +686,12 @@ func (gce *GCEClient) validateMachine(machine *clusterv1.Machine, config *gcecon
 // cluster installation, it will operate as a no-op. It also returns the
 // original error for convenience, so callers can do "return handleMachineError(...)".
 func (gce *GCEClient) handleMachineError(machine *clusterv1.Machine, err *apierrors.MachineError) error {
-	if gce.machineClient != nil {
+	if gce.v1Alpha1Client != nil {
 		reason := err.Reason
 		message := err.Message
 		machine.Status.ErrorReason = &reason
 		machine.Status.ErrorMessage = &message
-		gce.machineClient.UpdateStatus(machine)
+		gce.v1Alpha1Client.Machines(machine.Namespace).UpdateStatus(machine)
 	}
 
 	glog.Errorf("Machine error: %v", err.Message)
