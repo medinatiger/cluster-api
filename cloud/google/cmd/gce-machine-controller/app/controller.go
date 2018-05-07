@@ -22,7 +22,9 @@ import (
 	"github.com/golang/glog"
 	"github.com/kubernetes-incubator/apiserver-builder/pkg/controller"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/client-go/kubernetes"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
@@ -107,10 +109,11 @@ func Run(server *options.MachineControllerServer) error {
 
 	leaderElectionClient := kubernetes.NewForConfigOrDie(rest.AddUserAgent(kubeConfig, "machine-leader-election"))
 
+	id = id + "-" + string(uuid.NewUUID())
 	// Lock required for leader election
 	rl, err := resourcelock.New(
 		leaderElectConfig.ResourceLock,
-		"default",
+		metav1.NamespaceSystem,
 		gceMachineControllerName,
 		leaderElectionClient.CoreV1(),
 		resourcelock.ResourceLockConfig{
